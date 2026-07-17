@@ -3,10 +3,14 @@ import { FadeIn } from './FadeIn';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Shield } from 'lucide-react';
 
+import profileWhiteShirt from '../assets/images/profile_white_shirt_1784311851948.jpg';
+import profileBlueSuit from '../assets/images/profile_blue_suit_1784311865475.jpg';
+import profileThoughtfulWatch from '../assets/images/profile_thoughtful_watch_1784311876964.jpg';
+
 const slideImages = [
-  "/src/assets/images/profile_white_shirt_1784311851948.jpg",
-  "/src/assets/images/profile_blue_suit_1784311865475.jpg",
-  "/src/assets/images/profile_thoughtful_watch_1784311876964.jpg"
+  profileWhiteShirt,
+  profileBlueSuit,
+  profileThoughtfulWatch
 ];
 
 export const HeroSection: React.FC = () => {
