@@ -9,7 +9,7 @@ interface PortfolioContextType {
   messages: ContactMessage[];
   isLoggedIn: boolean;
   isAdminPanelOpen: boolean;
-  login: (password: string) => boolean;
+  login: (pseudo: string, password: string) => boolean;
   logout: () => void;
   setAdminPanelOpen: (open: boolean) => void;
   updateAboutMe: (data: Partial<AboutMeData>) => void;
@@ -135,9 +135,26 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.setItem('portfolio_messages', JSON.stringify(messages));
   }, [messages]);
 
-  const login = (password: string): boolean => {
-    // Check credentials: we allow login using either 'claudek228' or 'password123'
-    if (password === 'claudek228' || password === 'password123') {
+  const login = (pseudo: string, password: string): boolean => {
+    const cleanPseudo = (pseudo || '').trim().toUpperCase();
+    const cleanPassword = (password || '').trim();
+
+    // Le pseudo et le mot de passe sont obligatoires
+    if (!cleanPseudo || !cleanPassword) {
+      return false;
+    }
+
+    // Le pseudo doit impérativement être CLAUDE228
+    const isPseudoValid = cleanPseudo === 'CLAUDE228';
+
+    // Mot de passe accepté
+    const isPasswordValid = 
+      cleanPassword === 'claudek228' || 
+      cleanPassword === 'CLAUDE228' || 
+      cleanPassword === 'claude228' || 
+      cleanPassword === 'password123';
+
+    if (isPseudoValid && isPasswordValid) {
       setIsLoggedIn(true);
       localStorage.setItem('portfolio_is_logged', 'true');
       return true;

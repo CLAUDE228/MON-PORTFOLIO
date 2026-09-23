@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { X, Lock, Shield, Eye, Mail, Trash2, Plus, Edit3, Briefcase, Award, Check } from 'lucide-react';
+import { X, Lock, Shield, Eye, Mail, Trash2, Plus, Edit3, Briefcase, Award, Check, User } from 'lucide-react';
 import { FadeIn } from './FadeIn';
 
 export const AdminPanel: React.FC = () => {
@@ -20,8 +20,9 @@ export const AdminPanel: React.FC = () => {
     addSkillToCategory,
   } = usePortfolio();
 
+  const [pseudo, setPseudo] = useState('');
   const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'messages' | 'about' | 'skills' | 'projects'>('messages');
 
   // Form states
@@ -48,13 +49,18 @@ export const AdminPanel: React.FC = () => {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const success = login(password);
+    if (!pseudo.trim() || !password.trim()) {
+      setLoginError("Veuillez obligatoirement renseigner votre pseudo et mot de passe.");
+      return;
+    }
+    const success = login(pseudo, password);
     if (success) {
-      setLoginError(false);
+      setLoginError(null);
+      setPseudo('');
       setPassword('');
       setAboutForm({ ...aboutMe });
     } else {
-      setLoginError(true);
+      setLoginError("Pseudo ou mot de passe incorrect.");
     }
   };
 
@@ -127,34 +133,71 @@ export const AdminPanel: React.FC = () => {
 
         {/* Not logged in */}
         {!isLoggedIn ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-16 max-w-md mx-auto text-center gap-6">
-            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/80 mb-2">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-14 max-w-md mx-auto text-center gap-6">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/80 mb-1">
               <Lock size={22} />
             </div>
             <div>
               <h3 className="text-lg font-medium text-white lowercase">connexion requise</h3>
               <p className="text-xs text-white/40 mt-1.5 lowercase">
-                veuillez entrer votre mot de passe pour accéder à la messagerie et à l'édition du portfolio.
+                veuillez entrer votre pseudo et votre mot de passe pour accéder à la messagerie et à l'espace privé.
               </p>
             </div>
 
-            <form onSubmit={handleLoginSubmit} className="w-full space-y-3">
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="entrez le mot de passe"
-                className="w-full text-center bg-neutral-900 border border-white/10 rounded-xl px-4 py-3.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors"
-              />
+            <form onSubmit={handleLoginSubmit} className="w-full space-y-4 text-left">
+              <div>
+                <label className="block text-[11px] font-mono uppercase tracking-wider text-white/60 mb-1.5 ml-1">
+                  Pseudo <span className="text-yellow-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/30">
+                    <User size={16} />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={pseudo}
+                    onChange={(e) => {
+                      setPseudo(e.target.value);
+                      if (loginError) setLoginError(null);
+                    }}
+                    placeholder="Entrez votre pseudo"
+                    className="w-full bg-neutral-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono uppercase tracking-wider text-white/60 mb-1.5 ml-1">
+                  Mot de passe <span className="text-yellow-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/30">
+                    <Lock size={16} />
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (loginError) setLoginError(null);
+                    }}
+                    placeholder="Entrez votre mot de passe"
+                    className="w-full bg-neutral-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors"
+                  />
+                </div>
+              </div>
+
               {loginError && (
-                <p className="text-red-400 text-xs text-center lowercase font-light">
-                  mot de passe incorrect. réessayez.
-                </p>
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center font-light">
+                  {loginError}
+                </div>
               )}
+
               <button
                 type="submit"
-                className="w-full bg-white hover:bg-neutral-200 text-black text-xs font-semibold uppercase tracking-wider py-3.5 rounded-xl transition-colors cursor-pointer"
+                className="w-full bg-white hover:bg-neutral-200 text-black text-xs font-semibold uppercase tracking-wider py-3.5 rounded-xl transition-colors cursor-pointer mt-1"
               >
                 s'authentifier
               </button>
