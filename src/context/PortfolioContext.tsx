@@ -136,7 +136,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [messages]);
 
   const login = (pseudo: string, password: string): boolean => {
-    const cleanPseudo = (pseudo || '').trim().toUpperCase();
+    const cleanPseudo = (pseudo || '').trim().toLowerCase();
     const cleanPassword = (password || '').trim();
 
     // Le pseudo et le mot de passe sont obligatoires
@@ -144,15 +144,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return false;
     }
 
-    // Le pseudo doit impérativement être CLAUDE228
-    const isPseudoValid = cleanPseudo === 'CLAUDE228';
+    // Le pseudo doit être bigy01
+    const isPseudoValid = cleanPseudo === 'bigy01';
 
-    // Mot de passe accepté
-    const isPasswordValid = 
-      cleanPassword === 'claudek228' || 
-      cleanPassword === 'CLAUDE228' || 
-      cleanPassword === 'claude228' || 
-      cleanPassword === 'password123';
+    // Seul le mot de passe olivier est accepté
+    const isPasswordValid = cleanPassword === 'olivier';
 
     if (isPseudoValid && isPasswordValid) {
       setIsLoggedIn(true);
