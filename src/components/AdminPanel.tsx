@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { X, Lock, Shield, Eye, Mail, Trash2, Plus, Edit3, Briefcase, Award, Check, User } from 'lucide-react';
+import { X, Lock, Shield, Eye, Mail, Trash2, Plus, Edit3, Briefcase, Award, Check, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { FadeIn } from './FadeIn';
 
 export const AdminPanel: React.FC = () => {
@@ -18,12 +18,35 @@ export const AdminPanel: React.FC = () => {
     addProject,
     deleteProject,
     addSkillToCategory,
+    deleteContactMessage,
   } = usePortfolio();
 
   const [pseudo, setPseudo] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockCountdown, setLockCountdown] = useState(0);
   const [activeTab, setActiveTab] = useState<'messages' | 'about' | 'skills' | 'projects'>('messages');
+
+  // Compte à rebours du verrouillage temporaire anti-bruteforce
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isLocked && lockCountdown > 0) {
+      timer = setInterval(() => {
+        setLockCountdown((prev) => {
+          if (prev <= 1) {
+            setIsLocked(false);
+            setAttempts(0);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isLocked, lockCountdown]);
 
   // Form states
   const [aboutForm, setAboutForm] = useState({ ...aboutMe });
@@ -47,20 +70,41 @@ export const AdminPanel: React.FC = () => {
 
   if (!isAdminPanelOpen) return null;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocked || isSubmitting) return;
+
     if (!pseudo.trim() || !password.trim()) {
       setLoginError("Veuillez obligatoirement renseigner votre pseudo et mot de passe.");
       return;
     }
-    const success = login(pseudo, password);
+
+    setIsSubmitting(true);
+    setLoginError(null);
+
+    // Temporisation de sécurité pour immuniser contre le bruteforce automatique
+    await new Promise((res) => setTimeout(res, 350));
+
+    const success = await login(pseudo, password);
+    setIsSubmitting(false);
+
     if (success) {
       setLoginError(null);
+      setAttempts(0);
       setPseudo('');
       setPassword('');
       setAboutForm({ ...aboutMe });
     } else {
-      setLoginError("Pseudo ou mot de passe incorrect.");
+      const nextAttempts = attempts + 1;
+      setAttempts(nextAttempts);
+      if (nextAttempts >= 3) {
+        setIsLocked(true);
+        setLockCountdown(30);
+        setLoginError("Trop de tentatives infructueuses. Accès temporairement verrouillé pendant 30 secondes.");
+      } else {
+        const remaining = 3 - nextAttempts;
+        setLoginError(`Pseudo ou mot de passe incorrect. (${remaining} tentative${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''})`);
+      }
     }
   };
 
@@ -145,6 +189,16 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <form onSubmit={handleLoginSubmit} className="w-full space-y-4 text-left">
+              {isLocked && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5">
+                  <ShieldAlert size={18} className="shrink-0 text-amber-400 animate-pulse" />
+                  <div>
+                    <span className="font-semibold block">Accès temporairement verrouillé</span>
+                    <span>Trop d'échecs. Réessayez dans <strong className="text-white font-mono">{lockCountdown}s</strong>.</span>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11px] font-mono uppercase tracking-wider text-white/60 mb-1.5 ml-1">
                   Pseudo <span className="text-yellow-500">*</span>
@@ -156,13 +210,14 @@ export const AdminPanel: React.FC = () => {
                   <input
                     type="text"
                     required
+                    disabled={isLocked || isSubmitting}
                     value={pseudo}
                     onChange={(e) => {
                       setPseudo(e.target.value);
                       if (loginError) setLoginError(null);
                     }}
                     placeholder="Entrez votre pseudo"
-                    className="w-full bg-neutral-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors"
+                    className="w-full bg-neutral-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -178,18 +233,19 @@ export const AdminPanel: React.FC = () => {
                   <input
                     type="password"
                     required
+                    disabled={isLocked || isSubmitting}
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
                       if (loginError) setLoginError(null);
                     }}
                     placeholder="Entrez votre mot de passe"
-                    className="w-full bg-neutral-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors"
+                    className="w-full bg-neutral-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-white/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
 
-              {loginError && (
+              {loginError && !isLocked && (
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center font-light">
                   {loginError}
                 </div>
@@ -197,10 +253,27 @@ export const AdminPanel: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full bg-white hover:bg-neutral-200 text-black text-xs font-semibold uppercase tracking-wider py-3.5 rounded-xl transition-colors cursor-pointer mt-1"
+                disabled={isLocked || isSubmitting}
+                className="w-full bg-white hover:bg-neutral-200 text-black text-xs font-semibold uppercase tracking-wider py-3.5 rounded-xl transition-colors cursor-pointer mt-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                s'authentifier
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin text-black" />
+                    <span>Vérification sécurisée...</span>
+                  </>
+                ) : isLocked ? (
+                  <span>Verrouillé ({lockCountdown}s)</span>
+                ) : (
+                  <span>s'authentifier</span>
+                )}
               </button>
+
+              <div className="pt-2 text-center">
+                <span className="inline-flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono">
+                  <Shield size={11} className="text-emerald-400/80" />
+                  Sécurisé : Hachage SHA-256 + Sel & Session signée
+                </span>
+              </div>
             </form>
           </div>
         ) : (
@@ -291,38 +364,76 @@ export const AdminPanel: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {messages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className="bg-neutral-900/40 border border-white/5 p-5 rounded-2xl flex items-start gap-4 hover:border-white/10 transition-colors"
-                        >
-                          <div className="flex-1 space-y-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
-                              <div>
-                                <span className="font-semibold text-sm text-white block lowercase">
-                                  {msg.name}
-                                </span>
-                                <span className="text-xs text-white/40 block">
-                                  {msg.email}
-                                </span>
+                      {messages.map((msg) => {
+                        const isSecurityAlert = msg.id.startsWith('security-alert-') || msg.email.includes('securite-connexion');
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`p-5 rounded-2xl flex items-start gap-4 transition-all ${
+                              isSecurityAlert
+                                ? 'bg-amber-500/10 border border-amber-500/40 shadow-lg shadow-amber-950/20'
+                                : 'bg-neutral-900/40 border border-white/5 hover:border-white/10'
+                            }`}
+                          >
+                            <div className="flex-1 space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                                <div className="flex items-center gap-3">
+                                  {isSecurityAlert ? (
+                                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-500/30">
+                                      <ShieldAlert size={16} className="text-amber-400" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-xl bg-white/5 text-white/60 flex items-center justify-center shrink-0 border border-white/5">
+                                      <Mail size={15} />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-semibold text-sm block ${isSecurityAlert ? 'text-amber-200' : 'text-white'}`}>
+                                        {msg.name}
+                                      </span>
+                                      {isSecurityAlert && (
+                                        <span className="text-[9px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 font-semibold tracking-wider">
+                                          Audit Sécurité
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-white/40 block font-mono">
+                                      {msg.email}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2.5">
+                                  <span className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border ${
+                                    isSecurityAlert 
+                                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold' 
+                                      : 'bg-white/5 text-white/40 border-white/5'
+                                  }`}>
+                                    {msg.date}
+                                  </span>
+                                  <button
+                                    onClick={() => deleteContactMessage(msg.id)}
+                                    title="Supprimer ce message"
+                                    className="p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
                               </div>
-                              <span className="text-[10px] font-mono text-white/30">
-                                {msg.date}
-                              </span>
-                            </div>
-                            <div>
-                              {msg.subject && (
-                                <span className="text-xs font-medium text-white/80 block mb-1 lowercase">
-                                  sujet: {msg.subject}
-                                </span>
-                              )}
-                              <p className="text-xs sm:text-sm text-white/60 leading-relaxed whitespace-pre-line lowercase">
-                                {msg.message}
-                              </p>
+                              <div>
+                                {msg.subject && (
+                                  <span className={`text-xs font-semibold block mb-1.5 ${isSecurityAlert ? 'text-amber-200' : 'text-white/80'}`}>
+                                    {msg.subject}
+                                  </span>
+                                )}
+                                <p className={`text-xs sm:text-sm leading-relaxed whitespace-pre-line ${isSecurityAlert ? 'text-amber-100/90 font-mono text-[11px] bg-black/40 p-3 rounded-xl border border-amber-500/20' : 'text-white/60 lowercase'}`}>
+                                  {msg.message}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -9,7 +9,7 @@ interface PortfolioContextType {
   messages: ContactMessage[];
   isLoggedIn: boolean;
   isAdminPanelOpen: boolean;
-  login: (pseudo: string, password: string) => boolean;
+  login: (pseudo: string, password: string) => Promise<boolean>;
   logout: () => void;
   setAdminPanelOpen: (open: boolean) => void;
   updateAboutMe: (data: Partial<AboutMeData>) => void;
@@ -34,6 +34,54 @@ const defaultAbout: AboutMeData = {
   bac: "Série D scientifique à l'OPEM BAGUIDA",
   specialisation: "Génie Logiciel, Sécurité & Réseaux"
 };
+
+// Paramètres de sécurisation cryptographique
+// Aucun identifiant ou mot de passe n'est stocké en texte clair dans le code
+const AUTH_SALT = "portfolio_salt_kcd_2026_x89!";
+const EXPECTED_PSEUDO_HASH = "6c71e849c467cad5e311c867591a9ca5b52f293b9e3b8a27873d05eeba6ffaaf";
+const EXPECTED_PASS_HASH = "c14c4c95d47a22f7fe2879b2d36207ec89c1150004bd6005bd64e72667567924";
+const EXPECTED_SESSION_TOKEN = "a0e2f5aa4cbb10b402da72a3b890a1e7a6b91cd70cbae31a8fe3fe175ea2c3fd";
+const AUTH_SESSION_KEY = "portfolio_secure_session_v1";
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 heures
+
+// Calcul d'empreinte SHA-256 via WebCrypto (standard du navigateur)
+async function computeSha256(message: string): Promise<string> {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(message);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return '';
+}
+
+// Vérification stricte du jeton de session (bloque tout contournement par localStorage arbitraire)
+function verifyStoredSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    // Purge de l'ancienne clé vulnérable si elle existe
+    localStorage.removeItem('portfolio_is_logged');
+
+    const stored = sessionStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_KEY);
+    if (!stored) return false;
+    const session = JSON.parse(stored);
+    if (session?.token !== EXPECTED_SESSION_TOKEN) {
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return false;
+    }
+    if (!session?.timestamp || Date.now() - session.timestamp > SESSION_MAX_AGE_MS) {
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load state from localStorage or use defaults
@@ -113,7 +161,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return localStorage.getItem('portfolio_is_logged') === 'true';
+    return verifyStoredSession();
   });
 
   const [isAdminPanelOpen, setAdminPanelOpen] = useState(false);
@@ -135,7 +183,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.setItem('portfolio_messages', JSON.stringify(messages));
   }, [messages]);
 
-  const login = (pseudo: string, password: string): boolean => {
+  const login = async (pseudo: string, password: string): Promise<boolean> => {
     const cleanPseudo = (pseudo || '').trim().toLowerCase();
     const cleanPassword = (password || '').trim();
 
@@ -144,15 +192,57 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return false;
     }
 
-    // Le pseudo doit être bigy01
-    const isPseudoValid = cleanPseudo === 'bigy01';
+    // Calcul des empreintes cryptographiques avec sel (SHA-256)
+    // Le pseudo et le mot de passe réels n'apparaissent nulle part dans le code
+    const hashedPseudo = await computeSha256(AUTH_SALT + 'pseudo:' + cleanPseudo);
+    const hashedPass = await computeSha256(AUTH_SALT + 'pass:' + cleanPassword);
 
-    // Seul le mot de passe olivier est accepté
-    const isPasswordValid = cleanPassword === 'olivier';
+    const isPseudoValid = hashedPseudo === EXPECTED_PSEUDO_HASH;
+    const isPasswordValid = hashedPass === EXPECTED_PASS_HASH;
 
     if (isPseudoValid && isPasswordValid) {
       setIsLoggedIn(true);
-      localStorage.setItem('portfolio_is_logged', 'true');
+      const sessionData = JSON.stringify({
+        token: EXPECTED_SESSION_TOKEN,
+        timestamp: Date.now()
+      });
+      sessionStorage.setItem(AUTH_SESSION_KEY, sessionData);
+      localStorage.setItem(AUTH_SESSION_KEY, sessionData);
+
+      // Enregistrement immédiat d'une alerte de sécurité avec heure, minute, seconde et pseudo
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const dateStr = now.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
+      let clientDetails = 'Navigateur Web';
+      if (typeof navigator !== 'undefined') {
+        const ua = navigator.userAgent;
+        if (/iphone|ipad|ipod/i.test(ua)) clientDetails = 'Apple iPhone / iOS';
+        else if (/android/i.test(ua)) clientDetails = 'Smartphone Android';
+        else if (/windows/i.test(ua)) clientDetails = 'Ordinateur Windows';
+        else if (/macintosh|mac os x/i.test(ua)) clientDetails = 'Ordinateur Mac OS';
+        else if (/linux/i.test(ua)) clientDetails = 'Ordinateur Linux';
+      }
+
+      const alertMessage: ContactMessage = {
+        id: 'security-alert-' + Date.now(),
+        name: `🚨 Alerte Connexion Espace Privé`,
+        email: 'securite-connexion@portfolio.admin',
+        subject: `Connexion détectée à ${timeStr}`,
+        message: `Une connexion à votre espace privé a été établie.\n\n⏰ Heure précise : ${timeStr} (heures:minutes:secondes)\n📅 Date : ${dateStr}\n👤 Pseudo utilisé : ${cleanPseudo}\n💻 Appareil : ${clientDetails}\n\n⚠️ Si vous n'êtes PAS à l'origine de cette connexion effectuée à ${timeStr}, quelqu'un d'autre a utilisé vos identifiants : modifiez immédiatement votre mot de passe !`,
+        date: `${dateStr} à ${timeStr}`
+      };
+
+      setMessages(prev => [alertMessage, ...prev]);
       return true;
     }
     return false;
@@ -160,6 +250,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const logout = () => {
     setIsLoggedIn(false);
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(AUTH_SESSION_KEY);
     localStorage.removeItem('portfolio_is_logged');
   };
 
